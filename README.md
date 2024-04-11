@@ -2,4 +2,4 @@
 
 ![rustycan](rustycan.jpg)
 
-A MacOs (Arm) interactive process viewer written in Rust.
+A MacOs (ARM-based) interactive process viewer written in Rust.
