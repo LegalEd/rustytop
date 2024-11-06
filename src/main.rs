@@ -1,21 +1,7 @@
-//! # [Ratatui] Table example
-//!
-//! The latest version of this example is available in the [examples] folder in the repository.
-//!
-//! Please note that the examples are designed to be run against the `main` branch of the Github
-//! repository. This means that you may not be able to compile with the latest release version on
-//! crates.io, or the one that you have installed locally.
-//!
-//! See the [examples readme] for more information on finding examples that match the version of the
-//! library you are using.
-//!
-//! [Ratatui]: https://github.com/ratatui-org/ratatui
-//! [examples]: https://github.com/ratatui-org/ratatui/blob/main/examples
-//! [examples readme]: https://github.com/ratatui-org/ratatui/blob/main/examples/README.md
+//! # [Rustytop] A rust based top
 
 use std::{env::consts, error::Error, io};
 
-use itertools::Itertools;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     crossterm::{
@@ -26,7 +12,7 @@ use ratatui::{
     layout::{Constraint, Layout, Margin, Rect},
     style::{self, Color, Modifier, Style, Stylize},
     terminal::{Frame, Terminal},
-    text::{Line, Text},
+    text::Line,
     widgets::{
         Block, BorderType, Cell, HighlightSpacing, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, TableState,
@@ -79,28 +65,6 @@ struct ProcessMap {
     path: String,
     user: String,
     // memory: u64,
-}
-
-impl ProcessMap {
-    const fn ref_array(&self) -> [&String; 4] {
-        [&self.pid, &self.name, &self.path, &self.user]
-    }
-
-    fn pid(&self) -> &str {
-        &self.pid
-    }
-
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn path(&self) -> &str {
-        &self.path
-    }
-
-    fn user(&self) -> &str {
-        &self.user
-    }
 }
 
 struct App {
@@ -225,8 +189,6 @@ impl App {
     }
 }
 
-//struct for process details
-
 fn main() -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -304,7 +266,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Note: TableState should be stored in your application state (not constructed in your render
     // method) so that the selected row is preserved across renders
-    //let mut table_state = TableState::default();
+
     // items = ([Vec<String>],[],[],[])
     let len = app.items[0].len();
     let mut rows = vec![];
@@ -327,8 +289,6 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Length(30),
     ];
 
-    // <-- work on row selection ordering
-
     let table = Table::new(rows, widths)
         .block(Block::new().title("Processes"))
         .column_spacing(1)
@@ -337,43 +297,6 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(Style::new().reversed());
 
     f.render_stateful_widget(table, area, &mut app.state);
-}
-
-fn constraint_len_calculator(items: &[ProcessMap]) -> (u16, u16, u16, u16) {
-    let pid_len = items
-        .iter()
-        .map(ProcessMap::pid)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let name_len = items
-        .iter()
-        .map(ProcessMap::name)
-        .flat_map(str::lines)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-    let path_len = items
-        .iter()
-        .map(ProcessMap::path)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-
-    let user_len = items
-        .iter()
-        .map(ProcessMap::user)
-        .map(UnicodeWidthStr::width)
-        .max()
-        .unwrap_or(0);
-
-    #[allow(clippy::cast_possible_truncation)]
-    (
-        pid_len as u16,
-        name_len as u16,
-        path_len as u16,
-        user_len as u16,
-    )
 }
 
 fn render_scrollbar(f: &mut Frame, app: &mut App, area: Rect) {
