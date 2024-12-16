@@ -1,11 +1,13 @@
 //! # [Rustytop] A rust based top
 
-use std::{env::consts, error::Error, io};
+use std::{any::type_name_of_val, env::consts, error::Error, io};
 
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     crossterm::{
-        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+        event::{
+            self, poll, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+        },
         execute,
         terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     },
@@ -60,7 +62,7 @@ impl TableColors {
 }
 
 struct ProcessMap {
-    pid: String,
+    pid: u32,
     name: String,
     path: String,
     user: String,
@@ -70,10 +72,14 @@ struct ProcessMap {
 struct App {
     state: TableState,
     items: [Vec<String>; 4],
+    input: String,
     longest_item_lens: (u16, u16, u16, u16), // order is (pid, name, path,, user, memory)
     scroll_state: ScrollbarState,
     colors: TableColors,
     color_index: usize,
+    input_mode: InputMode,
+    message: Vec<String>,
+    character_index: usize,
 }
 
 impl App {
@@ -112,7 +118,7 @@ impl App {
             .unwrap()
             .to_string();
             table_process_map.push(ProcessMap {
-                pid: pid.to_string(),
+                pid: pid.as_u32(),
                 name: String::from(process.name()),
                 path: String::from(process.exe().unwrap().to_str().unwrap()),
                 user: user_uid,
@@ -135,7 +141,6 @@ impl App {
         }
 
         let data_vec = [pids, names, path, users];
-
         Self {
             state: TableState::default().with_selected(0),
             longest_item_lens: (100, 100, 100, 100),
@@ -143,6 +148,10 @@ impl App {
             colors: TableColors::new(&PALETTES[0]),
             color_index: 0,
             items: data_vec,
+            input_mode: InputMode::Normal,
+            input: String::new(),
+            message: Vec::new(),
+            character_index: 0,
         }
     }
     pub fn next(&mut self) {
@@ -187,6 +196,31 @@ impl App {
     pub fn set_colors(&mut self) {
         self.colors = TableColors::new(&PALETTES[self.color_index]);
     }
+
+    pub fn submit_message(&mut self) {
+        self.message.push(self.input.clone());
+        self.input.clear();
+        self.input_mode = InputMode::Normal;
+    }
+
+    pub fn enter_char(&mut self, new_char: char) {
+        let index = self.byte_index();
+        self.input.insert(index, new_char);
+        self.character_index = self.character_index.saturating_add(1);
+    }
+
+    pub fn byte_index(&self) -> usize {
+        self.input
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.character_index)
+            .unwrap_or(self.input.len())
+    }
+
+    pub fn clear(&mut self) {
+        self.input = String::new();
+        self.message = Vec::new();
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -222,18 +256,38 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         terminal.draw(|f| ui(f, &mut app))?;
 
         if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('j') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                    KeyCode::Char('l') | KeyCode::Right => app.next_color(),
-                    KeyCode::Char('h') | KeyCode::Left => app.previous_color(),
-                    _ => {}
+            match app.input_mode {
+                InputMode::Normal => {
+                    if key.kind == KeyEventKind::Press {
+                        match key.code {
+                            KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                            KeyCode::Char('j') | KeyCode::Down => app.next(),
+                            KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                            KeyCode::Char('l') | KeyCode::Right => app.next_color(),
+                            KeyCode::Char('h') | KeyCode::Left => app.previous_color(),
+                            KeyCode::Char('f') | KeyCode::Insert => {
+                                app.input_mode = InputMode::Editing
+                            }
+                            KeyCode::Char('c') | KeyCode::Home => app.clear(),
+                            _ => {}
+                        }
+                    }
                 }
+
+                InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
+                    KeyCode::Enter => app.submit_message(),
+                    KeyCode::Char(to_insert) => app.enter_char(to_insert),
+                    _ => println!("Error. Enter letter or press return"),
+                },
+                InputMode::Editing => {}
             }
         }
     }
+}
+
+enum InputMode {
+    Normal,
+    Editing,
 }
 
 fn ui(f: &mut Frame, app: &mut App) {
@@ -266,19 +320,32 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Note: TableState should be stored in your application state (not constructed in your render
     // method) so that the selected row is preserved across renders
-
-    // items = ([Vec<String>],[],[],[])
+    // TODO!!!! Filter items
     let len = app.items[0].len();
     let mut rows = vec![];
 
+    //let filter = app.message[0].clone();
     // transform array of array
-    for n in 0..len {
-        rows.push(Row::new(vec![
-            app.items[0][n].clone(),
-            app.items[1][n].clone(),
-            app.items[2][n].clone(),
-            app.items[3][n].clone(),
-        ]));
+    if app.message.len() > 0 {
+        for n in 0..len {
+            if app.items[2][n].contains(&app.message[0]) {
+                rows.push(Row::new(vec![
+                    app.items[0][n].clone(),
+                    app.items[1][n].clone(),
+                    app.items[2][n].clone(),
+                    app.items[3][n].clone(),
+                ]));
+            }
+        }
+    } else {
+        for n in 0..len {
+            rows.push(Row::new(vec![
+                app.items[0][n].clone(),
+                app.items[1][n].clone(),
+                app.items[2][n].clone(),
+                app.items[3][n].clone(),
+            ]));
+        }
     }
 
     let widths = [
@@ -314,6 +381,7 @@ fn render_scrollbar(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
+    //println!("filter is: {:?}", app.message);
     let info_footer = Paragraph::new(Line::from(INFO_TEXT))
         .style(Style::new().fg(app.colors.row_fg).bg(app.colors.buffer_bg))
         .centered()
