@@ -21,7 +21,6 @@ use ratatui::{
     },
 };
 use style::palette::tailwind;
-use unicode_width::UnicodeWidthStr;
 use users::{get_current_uid, get_user_by_uid};
 
 const PALETTES: [tailwind::Palette; 4] = [
@@ -30,8 +29,7 @@ const PALETTES: [tailwind::Palette; 4] = [
     tailwind::INDIGO,
     tailwind::RED,
 ];
-const INFO_TEXT: &str =
-    "(Esc) quit | (↑) move up | (↓) move down | (→) next color | (←) previous color";
+const INFO_TEXT: &str = "(Esc) quit | (↑) move up | (↓) move down";
 
 const ITEM_HEIGHT: usize = 4;
 
@@ -184,15 +182,6 @@ impl App {
         self.scroll_state = self.scroll_state.position(i * ITEM_HEIGHT);
     }
 
-    pub fn next_color(&mut self) {
-        self.color_index = (self.color_index + 1) % PALETTES.len();
-    }
-
-    pub fn previous_color(&mut self) {
-        let count = PALETTES.len();
-        self.color_index = (self.color_index + count - 1) % count;
-    }
-
     pub fn set_colors(&mut self) {
         self.colors = TableColors::new(&PALETTES[self.color_index]);
     }
@@ -263,8 +252,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                             KeyCode::Char('j') | KeyCode::Down => app.next(),
                             KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                            KeyCode::Char('l') | KeyCode::Right => app.next_color(),
-                            KeyCode::Char('h') | KeyCode::Left => app.previous_color(),
                             KeyCode::Char('f') | KeyCode::Insert => {
                                 app.input_mode = InputMode::Editing
                             }
