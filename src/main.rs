@@ -16,8 +16,8 @@ use ratatui::{
     terminal::{Frame, Terminal},
     text::Line,
     widgets::{
-        Block, BorderType, Cell, HighlightSpacing, Paragraph, Row, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Table, TableState,
+        Block, BorderType, Cell, HighlightSpacing, List, ListState, Paragraph, Row, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Table, TableState,
     },
 };
 use style::palette::tailwind;
@@ -30,7 +30,7 @@ const PALETTES: [tailwind::Palette; 4] = [
     tailwind::RED,
 ];
 const INFO_TEXT: &str =
-    "(Esc) quit | (↑) move up | (↓) move down | (f) to add file filter | (u) to add user filter";
+    "(Esc) quit | (↑) move up | (↓) move down | (f) file filter | (u) user filter | (c) to clear";
 
 const ITEM_HEIGHT: usize = 4;
 
@@ -80,6 +80,8 @@ struct App {
     message: Vec<String>,
     character_index: usize,
     file_or_user: String,
+    message_state: ListState,
+    filtered_rows: usize,
 }
 
 impl App {
@@ -141,6 +143,7 @@ impl App {
         }
 
         let data_vec = [pids, names, path, users];
+        let data_vec_len = data_vec[0].len();
         Self {
             state: TableState::default().with_selected(0),
             longest_item_lens: (100, 100, 100, 100),
@@ -153,12 +156,14 @@ impl App {
             message: Vec::new(),
             character_index: 0,
             file_or_user: String::new(),
+            message_state: ListState::default(),
+            filtered_rows: data_vec_len,
         }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items[0].len() - 1 {
+                if i >= self.filtered_rows - 1 {
                     0
                 } else {
                     i + 1
@@ -174,7 +179,7 @@ impl App {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items[0].len() - 1
+                    self.filtered_rows - 1
                 } else {
                     i - 1
                 }
@@ -193,6 +198,8 @@ impl App {
         self.message.push(self.input.clone());
         self.input.clear();
         self.input_mode = InputMode::Normal;
+        self.state.select(Some(0));
+        self.scroll_state = self.scroll_state.position(0);
     }
 
     pub fn enter_char(&mut self, new_char: char) {
@@ -256,7 +263,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
-
         if let Event::Key(key) = event::read()? {
             match app.input_mode {
                 InputMode::Normal => {
@@ -290,7 +296,11 @@ enum InputMode {
 }
 
 fn ui(f: &mut Frame, app: &mut App) {
-    let vertical = &Layout::vertical([Constraint::Min(5), Constraint::Length(4)]);
+    let vertical = &Layout::vertical([
+        Constraint::Min(5),
+        Constraint::Length(4),
+        Constraint::Percentage(10),
+    ]);
     let rects = vertical.split(f.size());
 
     app.set_colors();
@@ -300,6 +310,8 @@ fn ui(f: &mut Frame, app: &mut App) {
     render_scrollbar(f, app, rects[0]);
 
     render_footer(f, app, rects[1]);
+
+    render_filter(f, app, rects[2]);
 }
 
 fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
@@ -319,14 +331,14 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Note: TableState should be stored in your application state (not constructed in your render
     // method) so that the selected row is preserved across renders
-    // TODO!!!! Filter items
     let len = app.items[0].len();
+    app.scroll_state = app.scroll_state.position(0);
     let mut rows = vec![];
 
-    //let filter = app.message[0].clone();
     // transform array of array
     if app.message.len() > 0 {
-        let mut item_col: usize = 2; // file by default
+        // filter by file by default, use user if set
+        let mut item_col: usize = 2;
         if app.file_or_user == "user" {
             item_col = 3
         }
@@ -352,10 +364,12 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         }
     }
 
+    app.filtered_rows = rows.len();
+
     let widths = [
         //  _ => app.colors.alt_row_color,
-        Constraint::Length(10),
-        Constraint::Length(50),
+        Constraint::Length(8),
+        Constraint::Length(52),
         Constraint::Length(100),
         Constraint::Length(30),
     ];
@@ -395,4 +409,23 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 .border_style(Style::new().fg(app.colors.footer_border_color)),
         );
     f.render_widget(info_footer, area);
+}
+
+fn render_filter(f: &mut Frame, app: &App, area: Rect) {
+    // need to track liststate of message ie set liststate when message updates
+
+    let mut message = String::new();
+    if app.message.len() > 0 {
+        message = app.message[0].clone();
+    }
+    let line: Line = vec!["Filter is: ".red(), message.yellow()].into();
+    let filter_info = List::new(line)
+        .style(Style::new().fg(app.colors.row_fg).bg(app.colors.buffer_bg))
+        .block(
+            Block::bordered()
+                .border_type(BorderType::Double)
+                .border_style(Style::new().fg(app.colors.footer_border_color)),
+        );
+
+    f.render_widget(filter_info, area);
 }
