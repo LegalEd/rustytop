@@ -1,4 +1,4 @@
-//! # [Rustytop] A rust based top
+//! # [Rustytop] A rust based tool to display running processes
 
 use std::{any::type_name_of_val, env::consts, error::Error, io};
 
@@ -29,7 +29,8 @@ const PALETTES: [tailwind::Palette; 4] = [
     tailwind::INDIGO,
     tailwind::RED,
 ];
-const INFO_TEXT: &str = "(Esc) quit | (↑) move up | (↓) move down";
+const INFO_TEXT: &str =
+    "(Esc) quit | (↑) move up | (↓) move down | (f) to add file filter | (u) to add user filter";
 
 const ITEM_HEIGHT: usize = 4;
 
@@ -78,6 +79,7 @@ struct App {
     input_mode: InputMode,
     message: Vec<String>,
     character_index: usize,
+    file_or_user: String,
 }
 
 impl App {
@@ -150,6 +152,7 @@ impl App {
             input: String::new(),
             message: Vec::new(),
             character_index: 0,
+            file_or_user: String::new(),
         }
     }
     pub fn next(&mut self) {
@@ -210,6 +213,16 @@ impl App {
         self.input = String::new();
         self.message = Vec::new();
     }
+
+    pub fn file(&mut self) {
+        self.input_mode = InputMode::Editing;
+        self.file_or_user = String::from("file");
+    }
+
+    pub fn user(&mut self) {
+        self.input_mode = InputMode::Editing;
+        self.file_or_user = String::from("user");
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -252,10 +265,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                             KeyCode::Char('j') | KeyCode::Down => app.next(),
                             KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                            KeyCode::Char('f') | KeyCode::Insert => {
-                                app.input_mode = InputMode::Editing
-                            }
-                            KeyCode::Char('c') | KeyCode::Home => app.clear(),
+                            KeyCode::Char('f') | KeyCode::Insert => app.file(),
+                            KeyCode::Char('c') => app.clear(),
+                            KeyCode::Char('u') => app.user(),
                             _ => {}
                         }
                     }
@@ -314,8 +326,13 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     //let filter = app.message[0].clone();
     // transform array of array
     if app.message.len() > 0 {
+        let mut item_col: usize = 2; // file by default
+        if app.file_or_user == "user" {
+            item_col = 3
+        }
+
         for n in 0..len {
-            if app.items[2][n].contains(&app.message[0]) {
+            if app.items[item_col][n].contains(&app.message[0]) {
                 rows.push(Row::new(vec![
                     app.items[0][n].clone(),
                     app.items[1][n].clone(),
