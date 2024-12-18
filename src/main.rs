@@ -1,12 +1,12 @@
 //! # [Rustytop] A rust based tool to display running processes
 
-use std::{any::type_name_of_val, env::consts, error::Error, io};
+use std::{error::Error, io};
 
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     crossterm::{
         event::{
-            self, poll, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+            self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
         },
         execute,
         terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -16,7 +16,7 @@ use ratatui::{
     terminal::{Frame, Terminal},
     text::Line,
     widgets::{
-        Block, BorderType, Cell, HighlightSpacing, List, ListState, Paragraph, Row, Scrollbar,
+        Block, BorderType, Cell, List, ListState, Paragraph, Row, Scrollbar,
         ScrollbarOrientation, ScrollbarState, Table, TableState,
     },
 };
@@ -93,7 +93,6 @@ impl App {
         let mut sys = System::new_all();
 
         let user = get_user_by_uid(get_current_uid()).unwrap();
-        // println!("Hello, {}!", user.name().to_string_lossy());
 
         // Update all information of our `System` struct.
         sys.refresh_all();
@@ -377,7 +376,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let table = Table::new(rows, widths)
         .block(Block::new().title("Processes"))
         .column_spacing(1)
-        .style(Style::new().blue())
+        .style(Style::new().light_blue())
         .header(header)
         .highlight_style(Style::new().reversed());
 
@@ -399,7 +398,6 @@ fn render_scrollbar(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
-    //println!("filter is: {:?}", app.message);
     let info_footer = Paragraph::new(Line::from(INFO_TEXT))
         .style(Style::new().fg(app.colors.row_fg).bg(app.colors.buffer_bg))
         .centered()
@@ -412,13 +410,11 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_filter(f: &mut Frame, app: &App, area: Rect) {
-    // need to track liststate of message ie set liststate when message updates
-
     let mut message = String::new();
     if app.message.len() > 0 {
         message = app.message[0].clone();
     }
-    let line: Line = vec!["Filter is: ".red(), message.yellow()].into();
+    let line: Line = vec!["Filter is: ".light_blue(), message.cyan()].into();
     let filter_info = List::new(line)
         .style(Style::new().fg(app.colors.row_fg).bg(app.colors.buffer_bg))
         .block(
